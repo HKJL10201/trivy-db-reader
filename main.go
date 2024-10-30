@@ -131,6 +131,40 @@ func readValueFromSubBucket(db *bolt.DB, bucketName string, subBucketName string
 	return value, nil
 }
 
+func searchCVE(db *bolt.DB, bucketName string, subBucketName string) error {
+	// search all CVEs by system (bucketName) and package (subBucketName)
+	// var value string
+
+	err := db.View(func(tx *bolt.Tx) error {
+		// Retrieve the main bucket
+		mainBucket := tx.Bucket([]byte(bucketName))
+		if mainBucket == nil {
+			return fmt.Errorf("main bucket '%s' not found", bucketName)
+		}
+		// Retrieve the sub-bucket
+		subBucket := mainBucket.Bucket([]byte(subBucketName))
+		if subBucket == nil {
+			return fmt.Errorf("sub-bucket '%s' not found in '%s'", subBucketName, bucketName)
+		}
+		// Retrieve the value associated with the key
+		c := subBucket.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			fmt.Printf("%s: %s\n", k, v)
+			details, er := readValue(db, "vulnerability", string(k))
+			if er != nil {
+				return er
+			}
+			fmt.Printf("%s\n", details)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func updateValue(db *bolt.DB, bucketName string, key string, value string) error {
 	// Begin a read-write transaction
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -226,6 +260,8 @@ func deleteSubBucket(db *bolt.DB, bucketName string, subBucketName string) {
 	}
 }
 
+// Test cases /////////////////////////////////////////////////////////////////////////
+
 func updateTest() {
 	db := initDB()
 	defer db.Close()
@@ -281,41 +317,6 @@ func graph3DeletingLib() {
 	deleteSubBucket(db, bucketName, subBucketName)
 }
 
-func searchCVE(db *bolt.DB, bucketName string, subBucketName string) error {
-	// search all 
-	// var value string
-
-	err := db.View(func(tx *bolt.Tx) error {
-		// Retrieve the main bucket
-		mainBucket := tx.Bucket([]byte(bucketName))
-		if mainBucket == nil {
-			return fmt.Errorf("main bucket '%s' not found", bucketName)
-		}
-		// Retrieve the sub-bucket
-		subBucket := mainBucket.Bucket([]byte(subBucketName))
-		if subBucket == nil {
-			return fmt.Errorf("sub-bucket '%s' not found in '%s'", subBucketName, bucketName)
-		}
-		// Retrieve the value associated with the key
-		c := subBucket.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			fmt.Printf("%s: %s\n", k, v)
-			details, er := readValue(db, "vulnerability", string(k))
-			if er != nil {
-				return er
-			}
-			fmt.Printf("%s\n", details)
-		}
-		return nil
-	})
-
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-
 func testSearch() {
 	db := initDB()
 	defer db.Close()
@@ -325,10 +326,10 @@ func testSearch() {
 }
 
 func main() {
-	// dumpDB()
+	dumpDB()
 
 	// updateTest()
 	// graph2ModifyingCVE()
 	// graph3DeletingLib()
-	testSearch()
+	// testSearch()
 }
