@@ -12,7 +12,7 @@ import (
 
 var PATH = "C:\\Users\\hkjl1\\AppData\\Local\\trivy\\db\\trivy.db"
 
-func initDB() *bolt.DB {
+func InitDB() *bolt.DB {
 	db, err := bolt.Open(PATH, 0600, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -67,6 +67,63 @@ func dumpDB() {
 			// fmt.Printf("Bucket: %s\n", name)
 			fmt.Fprintf(outputFile, "Bucket: %s\n", name)
 			traverseBucket(outputFile, b, 1)
+			return nil
+		})
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func dumpPkg(file *os.File, bucket *bolt.Bucket, depth int) {
+	// traverse a bucket
+	c := bucket.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		if v == nil {
+			// This is a nested bucket
+			// fmt.Printf("%s[%s]\n", getIndent(depth), k)
+			fmt.Fprintf(file, "%s[%s]\n", getIndent(depth), k)
+			nestedBucket := bucket.Bucket(k)
+			if nestedBucket != nil {
+				dumpPkg(file, nestedBucket, depth+1)
+			}
+		} else {
+			// This is a key-value pair
+			// fmt.Printf("%s%s: %s\n", getIndent(depth), k, v)
+			fmt.Fprintf(file, "%s%s: %s\n", getIndent(depth), k, v)
+		}
+	}
+}
+
+func dumpOsPkg() {
+	// dump the DB file to a txt file
+	// Open the BoltDB file in read-only mode
+	db, err := bolt.Open(PATH, 0600, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	// Create or open the output file
+	outputFile, err := os.Create("trivy-os.txt")
+	// outputFile, err := os.Create("fanal-db.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer outputFile.Close()
+	outputFile2, err := os.Create("trivy-pkg.txt")
+	// outputFile, err := os.Create("fanal-db.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer outputFile2.Close()
+
+	err = db.View(func(tx *bolt.Tx) error {
+		// Traverse all top-level buckets
+		return tx.ForEach(func(name []byte, b *bolt.Bucket) error {
+			// fmt.Printf("Bucket: %s\n", name)
+			fmt.Fprintf(outputFile, "%s\n", name)
+			dumpPkg(outputFile2, b, 0)
 			return nil
 		})
 	})
@@ -263,7 +320,7 @@ func deleteSubBucket(db *bolt.DB, bucketName string, subBucketName string) {
 // Test cases /////////////////////////////////////////////////////////////////////////
 
 func updateTest() {
-	db := initDB()
+	db := InitDB()
 	defer db.Close()
 	// bucketNameVul := "vulnerability"
 	// key := "CVE-1234-0007"
@@ -292,7 +349,7 @@ func updateTest() {
 }
 
 func graph2ModifyingCVE() {
-	db := initDB()
+	db := InitDB()
 	defer db.Close()
 	bucketNameVul := "vulnerability"
 	// key := "CVE-1234-0007"
@@ -310,7 +367,7 @@ func graph2ModifyingCVE() {
 }
 
 func graph3DeletingLib() {
-	db := initDB()
+	db := InitDB()
 	defer db.Close()
 	bucketName := "alpine 3.9"
 	subBucketName := "expat"
@@ -318,7 +375,7 @@ func graph3DeletingLib() {
 }
 
 func testSearch() {
-	db := initDB()
+	db := InitDB()
 	defer db.Close()
 	bucketName := "alpine 3.9"
 	subBucketName := "expat"
@@ -332,4 +389,6 @@ func main() {
 	// graph2ModifyingCVE()
 	// graph3DeletingLib()
 	// testSearch()
+	// UpdateSeverity()
+	// UpdatePkgVersion()
 }
